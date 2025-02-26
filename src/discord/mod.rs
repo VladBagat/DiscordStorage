@@ -73,11 +73,8 @@ async fn download_file(download_path: &str, save_path: &str) {
             
 
 #[tokio::main]
-pub async fn main() {
-    dotenv().ok();
-    // Login with a bot token from the environment
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    // Set gateway intents, which decides what events the bot will be notified about
+pub async fn discord(token: &str) {
+
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
