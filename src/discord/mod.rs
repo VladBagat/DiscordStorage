@@ -16,6 +16,7 @@ use serenity::futures::StreamExt;
 use std::path::Path;
 use std::fs::create_dir_all;
 use serenity::all::Ready;
+use serenity::all::EditMessage;
 
 struct Handler {}
 
@@ -39,17 +40,24 @@ impl EventHandler for Handler {
                 target = tar.to_string();
             }
             None => {
-                panic!("Invalid command");
-                //TODO: Make an appropriate Discord handle
+                msg.channel_id.say(&ctx.http, "Invalid command. Use !info for more information").await.unwrap();
+                return;
             }
         }
         
         if command == "!upload" {
             match msg.channel_id.say(&ctx.http, "Trying to call algorithm").await {
-                Ok(_) => {
+                Ok(mut bot_message) => {
+                    let mut files_sent = 0;
                     let file_paths: Vec<std::path::PathBuf> = deconstruct(&target).unwrap();
+                    let file_amount = file_paths.len();
+                    bot_message.edit(&ctx.http, EditMessage::new().content(
+                        format!("Found {} files", file_paths.len()))).await.unwrap();
                     for path in file_paths {
                         send_file(&ctx, &msg, path).await;
+                        files_sent += 1;
+                        bot_message.edit(&ctx.http, EditMessage::new().content(
+                            format!("Uploaded {}/{} files", files_sent, &file_amount))).await.unwrap();
                     }
                 },
                 Err(why) => println!("Error sending message: {why:?}"),
