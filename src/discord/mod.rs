@@ -90,7 +90,7 @@ pub async fn discord(token: &str, target: &str) -> Result<(), serenity::Error> {
 
     // Start listening for events by starting a single shard
     if let Err(why) = client.start().await {
-        println!("Client error: {why:?}");
+        return Err(why);
     }
 
     Ok(())

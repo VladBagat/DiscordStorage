@@ -36,6 +36,7 @@ fn user_interaction() {
           Ok(_) => {println!("Bot connected successfully");},
           Err(e) => {
                println!("Error creating client: {:?}", e);
+               println!("Make sure your token is valid");
                user_interaction();
           },
      }
