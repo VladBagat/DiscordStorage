@@ -43,7 +43,7 @@ impl EventHandler for Handler {
                 //TODO: Make an appropriate Discord handle
             }
         }
-
+        
         if command == "!upload" {
             match msg.channel_id.say(&ctx.http, "Trying to call algorithm").await {
                 Ok(_) => {
@@ -96,10 +96,9 @@ async fn download_file(download_path: &str, save_path: &str) {
 }           
 
 fn strip_args(user_message: &str) -> Option<(&str, &str)> {
-    let args: Vec<&str> = user_message.split_whitespace().collect();
-    if args.len() < 2 {
-        println!("Not enough arguments");
-        return None;
+    let mut args: Vec<&str> = user_message.split_whitespace().collect();
+    if args.len() == 1 {
+       args.push("Empty");
     }
     let command = args[0];
     let target = args[1];
