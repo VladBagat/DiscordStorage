@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::{env, path};
 use std::path::PathBuf;
 use serenity::async_trait;
@@ -15,15 +16,17 @@ use serenity::futures::StreamExt;
 use std::path::Path;
 use std::fs::create_dir_all;
 
-struct Handler;
+struct Handler {
+    target: String,
+}
 
 #[async_trait]
-impl EventHandler for Handler  {
+impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         if msg.content == "!upload" {
             match msg.channel_id.say(&ctx.http, "Trying to call algorithm").await {
                 Ok(_) => {
-                    let file_paths: Vec<std::path::PathBuf> = deconstruct(r"D:\Downloads\Software Inc").unwrap();
+                    let file_paths: Vec<std::path::PathBuf> = deconstruct(&self.target).unwrap();
                     for path in file_paths {
                         send_file(&ctx, &msg, path).await;
                     }
@@ -69,22 +72,26 @@ async fn download_file(download_path: &str, save_path: &str) {
     }
     let mut out: File = File::create(save_path).expect("failed to create file");
     io::copy(&mut resp.bytes().await.unwrap().as_ref(), &mut out).expect("failed to copy content");
-}
-            
+}           
 
 #[tokio::main]
-pub async fn discord(token: &str) {
+pub async fn discord(token: &str, target: &str) -> Result<(), serenity::Error> {
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
     // Create a new instance of the Client, logging in as a bot.
-    let mut client =
-        Client::builder(&token, intents).event_handler(Handler).await.expect("Err creating client");
+    let mut client = Client::builder(token, intents)
+    .event_handler(Handler {
+        target: target.to_string(),
+    }).await
+    .map_err(|why| {return why})?;
 
     // Start listening for events by starting a single shard
     if let Err(why) = client.start().await {
         println!("Client error: {why:?}");
     }
+
+    Ok(())
 }

@@ -10,17 +10,17 @@ const CONSTRUCTION_DIR: &str = "ConstructorResult";
 const FILE_SIZE: usize = 8 * 1024 * 1024;
 
 pub fn deconstruct(target: &str) -> Result<Vec<PathBuf>> {
-    create_dir_all(format!(r"{}/{}", DIRECTORY, DECONSTRUCTION_DIR))?; 
-    create_dir_all(format!(r"{}/{}", DIRECTORY, CONSTRUCTION_DIR))?;
+    create_dir_all(DECONSTRUCTION_DIR)?; 
+    create_dir_all(CONSTRUCTION_DIR)?;
     let root = PathBuf::from(target);
     let res: Vec<PathBuf> = trace_path_deconstruct(&root);
     Ok(res)
 }
 
 pub fn reconstruct() -> Result<()> {
-    create_dir_all(format!(r"{}/{}", DIRECTORY, DECONSTRUCTION_DIR))?; 
-    create_dir_all(format!(r"{}/{}", DIRECTORY, CONSTRUCTION_DIR))?;
-    let construct_root = PathBuf::from(format!("{}/{}", DIRECTORY, DECONSTRUCTION_DIR));
+    create_dir_all(DECONSTRUCTION_DIR)?; 
+    create_dir_all(CONSTRUCTION_DIR)?;
+    let construct_root = PathBuf::from(DECONSTRUCTION_DIR);
     trace_path_construct(&construct_root);
     Ok(())
 }
@@ -32,11 +32,18 @@ fn deconstruct_file(file_path: &str) -> Result<Vec<String>> {
     
     loop {
         let write_path_base = clean_absolute_path(file_path);
-        let write_path = format!(r"{}/{}/{}_{}.bin", DIRECTORY, DECONSTRUCTION_DIR, write_path_base, &file_index);
+        let write_path = format!(r"{}/{}_{}.bin", DECONSTRUCTION_DIR, write_path_base, &file_index);
         let (buffer, read_bytes) = read_chunk(&file_index, &read_path)?;
         
         if read_bytes == 0 {
             break;
+        }
+
+        if let Some(parent) = Path::new(&write_path).parent() {
+            match create_dir_all(parent){
+                Ok(_) => {},
+                Err(e) => {println!("Creating directory {} failed: {:?}", parent.to_str().unwrap(), e);},
+            }
         }
 
         match write_file(&write_path, buffer){
@@ -59,7 +66,7 @@ fn reconstruct_file(file_path: &str) {
 
     let mut write_result: Vec<u8> = vec![];
     let file_path = remove_deconstruction_artifact(file_path);
-    let write_path = file_path.replace(r"/DeconstructorResult", "/ConstructorResult"); 
+    let write_path = file_path.replace(r"DeconstructorResult", "ConstructorResult"); 
     let mut index: i32 = 0;
     
 
@@ -158,8 +165,8 @@ fn process_deconstruct_files(top_dir: &Path) -> Option<Vec<PathBuf>>{
 }
 
 fn trace_path_deconstruct(top_dir: &PathBuf) -> Vec<PathBuf> {
-    create_directory_structure(&top_dir, format!(r"{}/{}", DIRECTORY, DECONSTRUCTION_DIR).as_str());
-    create_directory_structure(&top_dir, format!(r"{}/{}", DIRECTORY, CONSTRUCTION_DIR).as_str());
+    create_directory_structure(&top_dir, DECONSTRUCTION_DIR);
+    create_directory_structure(&top_dir, CONSTRUCTION_DIR);
     match process_deconstruct_files(&top_dir){
         Some(file_paths) => {file_paths},
         None => panic!("Error processing deconstruction files"),
