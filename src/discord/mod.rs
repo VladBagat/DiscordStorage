@@ -15,18 +15,39 @@ use std::fs::File;
 use serenity::futures::StreamExt;
 use std::path::Path;
 use std::fs::create_dir_all;
+use serenity::all::Ready;
 
-struct Handler {
-    target: String,
-}
+struct Handler {}
 
 #[async_trait]
 impl EventHandler for Handler {
+    async fn ready(&self, _: Context, ready: Ready) {
+        println!("Bot connected as {}", ready.user.name);
+    }
+
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "!upload" {
+
+        let command;
+        let target;
+
+        if msg.author.bot{
+            return;
+        }
+        match strip_args(&msg.content){
+            Some((com, tar)) => {
+                command = com.to_lowercase();
+                target = tar.to_string();
+            }
+            None => {
+                panic!("Invalid command");
+                //TODO: Make an appropriate Discord handle
+            }
+        }
+
+        if command == "!upload" {
             match msg.channel_id.say(&ctx.http, "Trying to call algorithm").await {
                 Ok(_) => {
-                    let file_paths: Vec<std::path::PathBuf> = deconstruct(&self.target).unwrap();
+                    let file_paths: Vec<std::path::PathBuf> = deconstruct(&target).unwrap();
                     for path in file_paths {
                         send_file(&ctx, &msg, path).await;
                     }
@@ -34,7 +55,7 @@ impl EventHandler for Handler {
                 Err(why) => println!("Error sending message: {why:?}"),
             }
         }
-        else if msg.content == "!download" {
+        else if command == "!download" {
             let mut messages = msg.channel_id.messages_iter(&ctx).boxed();
             while let Some(message_result) = messages.next().await {
                 match message_result {
@@ -74,8 +95,20 @@ async fn download_file(download_path: &str, save_path: &str) {
     io::copy(&mut resp.bytes().await.unwrap().as_ref(), &mut out).expect("failed to copy content");
 }           
 
+fn strip_args(user_message: &str) -> Option<(&str, &str)> {
+    let args: Vec<&str> = user_message.split_whitespace().collect();
+    if args.len() < 2 {
+        println!("Not enough arguments");
+        return None;
+    }
+    let command = args[0];
+    let target = args[1];
+
+    Some((command, target))
+}
+
 #[tokio::main]
-pub async fn discord(token: &str, target: &str) -> Result<(), serenity::Error> {
+pub async fn discord(token: &str) -> Result<(), serenity::Error> {
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
@@ -83,9 +116,7 @@ pub async fn discord(token: &str, target: &str) -> Result<(), serenity::Error> {
 
     // Create a new instance of the Client, logging in as a bot.
     let mut client = Client::builder(token, intents)
-    .event_handler(Handler {
-        target: target.to_string(),
-    }).await
+    .event_handler(Handler{}).await
     .map_err(|why| {return why})?;
 
     // Start listening for events by starting a single shard

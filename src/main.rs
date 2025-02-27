@@ -17,23 +17,8 @@ fn user_interaction() {
      print!("1. Enter a valid Discord Token: ");
      let token: String = read!("{}\n");
      let token = token.trim().to_string();
-     //It would be a good idea to validate the token here
-     let directory;  
-     loop {
-          print!("2. Choose a directory to upload: ");
-          let dir: String = read!("{}\n");
-          let dir = dir.trim();
-  
-          if PathBuf::from(dir).is_dir() {
-              directory = dir.to_string(); 
-              break;
-          } else {
-              println!("Directory is invalid");
-          }
-     }
-
-     match discord_main(&token, &directory){
-          Ok(_) => {println!("Bot connected successfully");},
+     match discord_main(&token){
+          Ok(_) => {},
           Err(e) => {
                println!("Error creating client: {:?}", e);
                println!("Make sure your token is valid");
