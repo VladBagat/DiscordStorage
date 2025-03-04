@@ -107,19 +107,8 @@ impl EventHandler for Handler {
                         .await.expect("Failed to send unknown command message");
             }
         }
-        
-        if command == "!upload" {
-                                
-        }
-        else if command == "!download" {
-            
-        }
-        else {
-            
-        }
     }
 }
-
 
 async fn send_file(ctx: &Context, msg: &Message, path: PathBuf) {
     let file= [CreateAttachment::path(&path).await.unwrap()];

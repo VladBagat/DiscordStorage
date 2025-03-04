@@ -10,16 +10,12 @@ const CONSTRUCTION_DIR: &str = "ConstructorResult";
 const FILE_SIZE: usize = 8 * 1024 * 1024;
 
 pub fn deconstruct(target: &str) -> Result<Vec<PathBuf>> {
-    create_dir_all(DECONSTRUCTION_DIR)?; 
-    create_dir_all(CONSTRUCTION_DIR)?;
     let root = PathBuf::from(target);
     let res: Vec<PathBuf> = trace_path_deconstruct(&root);
     Ok(res)
 }
 
 pub fn reconstruct() -> Result<()> {
-    create_dir_all(DECONSTRUCTION_DIR)?; 
-    create_dir_all(CONSTRUCTION_DIR)?;
     let construct_root = PathBuf::from(DECONSTRUCTION_DIR);
     trace_path_construct(&construct_root);
     Ok(())
@@ -106,14 +102,12 @@ fn read_chunk(file_index:&u32, path: &str) -> Result<(Vec<u8>, usize)> {
     let mut buffer = vec![0u8; FILE_SIZE];
 
     let n = f.read(&mut buffer[..])?;
-    //println!("Read {} KB", &n/1000);
     
     Ok((buffer[..n].to_vec(), n))
 }
 
 fn write_file(file_path:&str, buffer: Vec<u8>) -> Result<()> {
     //TODO: change file_path &str to PathBuf
-    //println!("Write path is: {}", file_path);
     let mut file = File::create(format!("{}", file_path))?; 
     file.write(&buffer)?; 
 
@@ -165,8 +159,6 @@ fn process_deconstruct_files(top_dir: &Path) -> Option<Vec<PathBuf>>{
 }
 
 fn trace_path_deconstruct(top_dir: &PathBuf) -> Vec<PathBuf> {
-    create_directory_structure(&top_dir, DECONSTRUCTION_DIR);
-    create_directory_structure(&top_dir, CONSTRUCTION_DIR);
     match process_deconstruct_files(&top_dir){
         Some(file_paths) => {file_paths},
         None => panic!("Error processing deconstruction files"),
