@@ -18,6 +18,7 @@ use std::fs::create_dir_all;
 use serenity::all::Ready;
 use serenity::all::EditMessage;
 use uuid::Uuid;
+use regex::Regex;
 
 struct Handler {}
 
@@ -48,7 +49,12 @@ impl EventHandler for Handler {
         };
 
         match command.as_str() {
-            "!upload" => {
+            "upload" => {
+                if target == "Empty" {
+                    msg.channel_id.say(&ctx.http, "Invalid command arguments. Use !info for more information")
+                        .await.expect("Failed to send invalid command message");
+                    return;
+                }
                 let id: String = Uuid::new_v4().to_string();
                 match msg.channel_id.say(&ctx.http, format!("Upload: {}. ID: {}", name, &id)).await {
                     Ok(_) => {
@@ -64,8 +70,10 @@ impl EventHandler for Handler {
                     Err(why) => println!("Error sending message: {why:?}"),
                 }        
             },
-            "!download" => {
+            "download" => {
                 let mut messages = msg.channel_id.messages_iter(&ctx).boxed();
+                msg.channel_id.say(&ctx.http, "Started installation")
+                            .await.expect("Failed to send upload success status message");
                 while let Some(message_result) = messages.next().await {
                     match message_result {
                         Ok(message) => {
@@ -77,22 +85,17 @@ impl EventHandler for Handler {
                         Err(error) => eprintln!("Uh oh! Error: {}", error),
                     }
                 }
-                match msg.channel_id.say(&ctx.http, "Trying to call algorithm").await {
-                    Ok(_) => {
-                        reconstruct().unwrap();
-                        msg.channel_id.say(&ctx.http, "Installation finished successfully")
-                            .await.expect("Failed to send upload success status message");
-                    },
-                    Err(why) => println!("Error sending message: {why:?}"),
-                }
+                reconstruct().unwrap();
+                msg.channel_id.say(&ctx.http, "Installation successfull")
+                    .await.expect("Failed to send upload success status message");
             },
-            "!info" => {
+            "info" => {
                 let message: &str = "Welcome to DiscordStore! You are currently running version 1.\n\
                      \n\
                      You have access to the following commands:\n\
                      \n\
                      - `!upload <path> <name>`\n\
-                       This command will search the given path (preferably absolute) and upload files to the current channel.
+                       This command will search the given path (preferably absolute) and upload files to the current channel.\n\
                        You **must** upload no more than 1 project per channel.\n\
                      \n\
                      - `!download`\n\
@@ -124,16 +127,30 @@ async fn download_file(download_path: &str, save_path: &str) {
     if let Some(parent) = Path::new(save_path).parent() {
         create_dir_all(parent).expect("Failed to create directory");
     }
-    let mut out: File = File::create(save_path).expect("failed to create file");
-    io::copy(&mut resp.bytes().await.unwrap().as_ref(), &mut out).expect("failed to copy content");
+    let mut out: File = File::create(save_path).expect("Failed to create file");
+    io::copy(&mut resp.bytes().await.unwrap().as_ref(), &mut out).expect("Failed to copy content");
 }           
 
 fn strip_args(user_message: &str) -> Option<(&str, &str, &str)> {
-    let args: Vec<&str> = user_message.split_whitespace().collect();
-    let command = args.get(0).unwrap_or(&"Empty");
-    let target = args.get(1).unwrap_or(&"Empty");
-    let name = args.get(2).unwrap_or(&"Empty");
-    Some((command.to_owned(), target.to_owned(), name.to_owned()))
+    let drive_regex = Regex::new(r"!(\w+)(?:\s+([^ ]+))?(?:\s+(.*))?").unwrap();
+    match drive_regex.captures(user_message) {
+        Some(caps) => {
+            let command = match caps.get(1) {
+                Some(m) => m.as_str(),
+                None => "",
+            };
+            let target = match caps.get(2) {
+                Some(m) => m.as_str(),
+                None => "",
+            };
+            let name = match caps.get(3) {
+                Some(m) => m.as_str(),
+                None => "",
+            };
+            Some((command, target, name))
+        },
+        None => {return None;},
+    }
 }
 
 #[tokio::main]

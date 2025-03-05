@@ -114,27 +114,11 @@ fn write_file(file_path:&str, buffer: Vec<u8>) -> Result<()> {
     Ok(())
 }
 
-fn create_directory_structure(top_dir: &Path, root: &str) {
-    if let Ok(entries) = read_dir(top_dir) {
-        for entry in entries.flatten() {
-            if entry.path().is_dir() {
-                let entry_path = clean_absolute_path(entry.path().to_str().unwrap());
-                let mut temp_write_path = PathBuf::from(root);
-                temp_write_path.push(&entry_path);
-                let _ = create_dir_all(&temp_write_path);
-                create_directory_structure(&entry.path(), root);
-            }
-        }
-    } else {
-        println!("Failed to read directory {:?}", top_dir);
-    }
-}
-
 fn process_deconstruct_files(top_dir: &Path) -> Option<Vec<PathBuf>>{
     let mut file_paths: Vec<PathBuf> = vec![];
     if let Ok(entries) = read_dir(top_dir) {
         for entry in entries.flatten() {
-            if entry.path().is_file() {
+            if entry.path().is_file() && is_definitely_file(&entry.path()) {
                 let path = entry.path();
                 match deconstruct_file(path.to_str().unwrap()){
                     Ok(local_vec) => {
