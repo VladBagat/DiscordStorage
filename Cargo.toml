@@ -12,4 +12,11 @@ reqwest = "0.12.12"
 text_io = "0.1.12"
 uuid = { version = "1.15.1", features = ["v4"]}
 
-
+[profile.release]
+opt-level = "z"       
+codegen-units = 1   
+lto = true        
+panic = "abort"     
+debug = false       
+strip = true        
+overflow-checks = false
