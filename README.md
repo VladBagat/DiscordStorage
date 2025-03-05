@@ -8,13 +8,15 @@ Created with inspiration from this [YouTube video](https://www.youtube.com/watch
 
 ## Usage
 
-You will need your own Discord token for app to work. For that you will need to create an app/bot. You can see the official guide.
-
-You need a discord server with your bot there. Use this link generator. Enable Administrator permission (8).
-
-Place binary discordstore.exe in any folder you have read/write access to and run it. Follow the instructions until the bot will be set up.
-
-Use !info for further guidance
+1. You will need your own Discord token for app to work. For that you will need to create an app/bot. You can see the [official guide](https://discord.com/developers/docs/quick-start/getting-started).
+   
+3. You need a discord server with your bot there. Use this [link generator](https://discordapi.com/permissions.html). Enable Administrator permission (8).
+   
+5. Place binary `discordstore.exe` in any folder you have read/write access to and run it. Follow the instructions until the bot will be set up.
+   
+7. Use !info for further guidance
+   
+---
 
 ## Warning 
 
