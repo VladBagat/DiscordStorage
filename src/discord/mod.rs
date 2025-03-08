@@ -1,169 +1,164 @@
-use std::ops::Deref;
-use std::{env, path};
-use std::path::PathBuf;
-use serenity::async_trait;
-use serenity::model::channel::Message;
-use serenity::model::error;
-use serenity::prelude::*;
-use serenity::builder::{CreateAttachment, CreateMessage};
-use dotenvy::dotenv;
-use reqwest::get;
-mod algorithm;
-use algorithm::{deconstruct, reconstruct};
-use std::io;
-use std::fs::File;
-use serenity::futures::StreamExt;
-use std::path::Path;
-use std::fs::create_dir_all;
-use serenity::all::Ready;
-use serenity::all::EditMessage;
-use uuid::Uuid;
-use regex::Regex;
+mod commands;
+pub mod utils;
+use ::serenity::all::{ChannelId, CreateChannel};
+use utils::Config;
+use poise::serenity_prelude as serenity;
+use std::{sync::Arc, time::Duration};
 
-struct Handler {}
+use colored::*;
 
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
-        println!("Bot connected as {}", ready.user.name);
-    }
 
-    async fn message(&self, ctx: Context, msg: Message) {
+// Types used by all command functions
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, Data, Error>;
 
-        if msg.author.bot {
-            return;
+// Custom user data passed to all command functions
+#[derive(Debug)]
+pub struct Data {
+    pub modify_config: bool,
+    pub auto: bool,
+    pub config: Option<Config>,
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        Self {
+            modify_config: false,
+            auto: false,
+            config: None,            
         }
+    }
+}
 
-        let (command, target, name) = match strip_args(&msg.content) {
-            Some((com, tar, tar_name)) => (
-                com.to_lowercase(),
-                tar.to_string(),
-                tar_name.to_string(),
-            ),
-            None => {
-                if let Err(e) = msg.channel_id.say(&ctx.http, "Invalid command. Use !info for more information").await {
-                    eprintln!("Failed to send message: {:?}", e);
-                }
-                return;
-            }
-        };
-
-        match command.as_str() {
-            "upload" => {
-                if target == "Empty" {
-                    msg.channel_id.say(&ctx.http, "Invalid command arguments. Use !info for more information")
-                        .await.expect("Failed to send invalid command message");
-                    return;
-                }
-                let id: String = Uuid::new_v4().to_string();
-                match msg.channel_id.say(&ctx.http, format!("Upload: {}. ID: {}", name, &id)).await {
-                    Ok(_) => {
-                        msg.channel_id.say(&ctx.http, "====START OF UPLOAD====")
-                            .await.expect("Failed to send upload start status message");
-                        let file_paths: Vec<std::path::PathBuf> = deconstruct(&target).unwrap();
-                        for path in file_paths {
-                            send_file(&ctx, &msg, path).await;
-                        }
-                        msg.channel_id.say(&ctx.http, "====END OF UPLOAD====")
-                            .await.expect("Failed to send upload success status message");
-                    },
-                    Err(why) => println!("Error sending message: {why:?}"),
-                }        
-            },
-            "download" => {
-                let mut messages = msg.channel_id.messages_iter(&ctx).boxed();
-                msg.channel_id.say(&ctx.http, "Started installation")
-                            .await.expect("Failed to send upload success status message");
-                while let Some(message_result) = messages.next().await {
-                    match message_result {
-                        Ok(message) => {
-                            if message.author.bot && message.attachments.len() > 0 {
-                                let download_path = message.attachments[0].url.clone();
-                                download_file(&download_path, &message.content).await;
-                                }
-                        },
-                        Err(error) => eprintln!("Uh oh! Error: {}", error),
-                    }
-                }
-                reconstruct().unwrap();
-                msg.channel_id.say(&ctx.http, "Installation successfull")
-                    .await.expect("Failed to send upload success status message");
-            },
-            "info" => {
-                let message: &str = "Welcome to DiscordStore! You are currently running version 1.\n\
-                     \n\
-                     You have access to the following commands:\n\
-                     \n\
-                     - `!upload <path> <name>`\n\
-                       This command will search the given path (preferably absolute) and upload files to the current channel.\n\
-                       You **must** upload no more than 1 project per channel.\n\
-                     \n\
-                     - `!download`\n\
-                       This command will download and format uploaded files in the current channel.\n\
-                       Find the downloaded project in the same directory as the `discorstore.exe` file.";
-
-                msg.channel_id.say(&ctx.http, message)
-                        .await.expect("Failed to send !info command message");
-            },
-            _ => {
-                msg.channel_id.say(&ctx.http, "Unknown command. Use !info for help.")
-                        .await.expect("Failed to send unknown command message");
+async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    match error {
+        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            println!("Error in command `{}`: {:?}", ctx.command().name, error,);
+        }
+        error => {
+            if let Err(e) = poise::builtins::on_error(error).await {
+                println!("Error while handling error: {}", e)
             }
         }
     }
 }
 
-async fn send_file(ctx: &Context, msg: &Message, path: PathBuf) {
-    let file= [CreateAttachment::path(&path).await.unwrap()];
-    let builder = CreateMessage::new().content(path.to_str().unwrap());
-    match msg.channel_id.send_files(&ctx.http, file, builder).await {
-        Ok(_) => {},
-        Err(why) => println!("Error sending file: {why:?}"),
-    }
-}
+async fn event_handler(
+    ctx: &serenity::Context,
+    event: &serenity::FullEvent,
+    _framework: poise::FrameworkContext<'_, Data, Error>,
+    data: &Data,
+) -> Result<(), Error> {
+    match event {
+        serenity::FullEvent::Ready { data_about_bot, .. } => {
+            println!("{} {}!", "✓ Connected to Discord as".green().bold(), data_about_bot.user.name.green().bold());
+            if data.auto {
+                println!("{}", "Running auto configuration...".blue());
+            }
+            
+            if data.modify_config{
+                if data.auto {
+                    let guild = ctx.cache.guilds()[0];
+                    let category_id: ChannelId = guild.create_channel(
+                        &ctx.http,
+                        CreateChannel::new("DiscordStorage").kind(serenity::ChannelType::Category)
+                        ).await?.id;
 
-async fn download_file(download_path: &str, save_path: &str) {
-    let resp: reqwest::Response = reqwest::get(download_path).await.expect(format!("Failed to download a file from url {}", download_path).as_str());
-    if let Some(parent) = Path::new(save_path).parent() {
-        create_dir_all(parent).expect("Failed to create directory");
-    }
-    let mut out: File = File::create(save_path).expect("Failed to create file");
-    io::copy(&mut resp.bytes().await.unwrap().as_ref(), &mut out).expect("Failed to copy content");
-}           
+                    let cache_channel_id: ChannelId = guild.create_channel(
+                        &ctx.http,
+                        CreateChannel::new("Cache").kind(serenity::ChannelType::Text).category(category_id)
+                        ).await?.id;
 
-fn strip_args(user_message: &str) -> Option<(&str, &str, &str)> {
-    let drive_regex = Regex::new(r"!(\w+)(?:\s+([^ ]+))?(?:\s+(.*))?").unwrap();
-    match drive_regex.captures(user_message) {
-        Some(caps) => {
-            let command = match caps.get(1) {
-                Some(m) => m.as_str(),
-                None => "",
-            };
-            let target = match caps.get(2) {
-                Some(m) => m.as_str(),
-                None => "",
-            };
-            let name = match caps.get(3) {
-                Some(m) => m.as_str(),
-                None => "",
-            };
-            Some((command, target, name))
-        },
-        None => {return None;},
+                    let storage_channel_id: ChannelId = guild.create_channel(
+                        &ctx.http,
+                        CreateChannel::new("Storage").kind(serenity::ChannelType::Text).category(category_id)
+                        ).await?.id;
+
+                    cache_channel_id.say(&ctx.http,
+                        "This channel is used for internal operations. Please, do not alter data in this channel."
+                    ).await?;
+                    storage_channel_id.say(&ctx.http,
+                        "This channel is used for internal operations. Please, do not alter data in this channel."
+                    ).await?;
+                    
+                    let category: u64 = category_id.get();
+                    let cache_channel: u64 = cache_channel_id.get();
+                    let storage_channel: u64 = storage_channel_id.get();
+
+                    let config = Config { token:ctx.http.token().to_owned(), category, cache_channel, storage_channel };
+                    utils::write_config(&config)?;
+                }
+                else {
+                    utils::write_config(&data.config.as_ref().unwrap())?;
+                }
+            }
+            
+            if data.auto{
+                println!("{}", "\n✓ Configuration complete!".green().bold());
+            }
+            
+        }
+        _ => {}
     }
+    Ok(())
 }
 
 #[tokio::main]
-pub async fn discord(token: &str) -> Result<(), serenity::Error> {
+pub async fn discord(token: &str, data: Data) {
+    tracing_subscriber::fmt::init();
 
-    let mut client = Client::builder(token,  GatewayIntents::all())
-    .event_handler(Handler{}).await
-    .map_err(|why| {return why})?;
+    // FrameworkOptions contains all of poise's configuration option in one struct
+    // Every option can be omitted to use its default value
+    let options = poise::FrameworkOptions {
+        event_handler: |ctx, event, framework, data| {
+            Box::pin(event_handler(ctx, event, framework, data))
+        },
+        commands: vec![commands::help(), commands::upload()],
+        prefix_options: poise::PrefixFrameworkOptions {
+            prefix: Some("~".into()),
+            edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
+                Duration::from_secs(3600),
+            ))),
+            additional_prefixes: vec![
+                poise::Prefix::Literal("hey bot,"),
+                poise::Prefix::Literal("hey bot"),
+            ],
+            ..Default::default()
+        },
+        // The global error handler for all error cases that may occur
+        on_error: |error| Box::pin(on_error(error)),
+        // This code is run before every command
+        pre_command: |ctx| {
+            Box::pin(async move {
+                println!("Executing command {}...", ctx.command().qualified_name);
+            })
+        },
+        // This code is run after a command if it was successful (returned Ok)
+        post_command: |ctx| {
+            Box::pin(async move {
+                println!("Executed command {}!", ctx.command().qualified_name);
+            })
+        },
+        ..Default::default()
+    };
 
-    // Start listening for events by starting a single shard
-    if let Err(why) = client.start().await {
-        return Err(why);
-    }
+    let framework = poise::Framework::builder()
+        .setup(move |ctx, _ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                Ok(data)
+            })
+        })
+        .options(options)
+        .build();
 
-    Ok(())
+    let intents =
+        serenity::GatewayIntents::all();
+
+    let client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await;
+      
+    client.unwrap().start().await.unwrap()
 }
