@@ -3,7 +3,7 @@ pub mod utils;
 use ::serenity::all::{ChannelId, CreateChannel};
 use utils::Config;
 use poise::serenity_prelude as serenity;
-use std::{sync::Arc, time::Duration};
+use std::{sync::{Arc, RwLock}, time::Duration};
 
 use colored::*;
 
@@ -13,11 +13,11 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 // Custom user data passed to all command functions
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Data {
     pub modify_config: bool,
     pub auto: bool,
-    pub config: Option<Config>,
+    pub config: Arc<RwLock<Config>>,
 }
 
 impl Default for Data {
@@ -25,7 +25,7 @@ impl Default for Data {
         Self {
             modify_config: false,
             auto: false,
-            config: None,            
+            config: Arc::new(RwLock::new(Config::default())),            
         }
     }
 }
@@ -87,10 +87,15 @@ async fn event_handler(
                     let storage_channel: u64 = storage_channel_id.get();
 
                     let config = Config { token:ctx.http.token().to_owned(), category, cache_channel, storage_channel };
+                    let mut config_field = data.config.write().unwrap();
+                    *config_field = config.clone();
+                     
                     utils::write_config(&config)?;
                 }
                 else {
-                    utils::write_config(&data.config.as_ref().unwrap())?;
+                    let config = data.config.read().unwrap();
+                    let config = &*config;
+                    utils::write_config(config)?;
                 }
             }
             
