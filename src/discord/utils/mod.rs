@@ -13,6 +13,17 @@ pub struct Config {
     pub storage_channel: u64,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            token: String::new(),
+            category: 0,
+            cache_channel: 0,
+            storage_channel: 0
+        }
+    }
+}
+
 pub fn write_config(config: &Config) -> Result<(), Error>{
     let config_path = get_config_path();
     create_dir_all(&config_path.parent().expect("Failed to get parent"))?;
