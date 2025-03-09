@@ -3,7 +3,8 @@ pub mod utils;
 use ::serenity::all::{ChannelId, CreateChannel};
 use utils::Config;
 use poise::serenity_prelude as serenity;
-use std::{sync::{Arc, RwLock}, time::Duration};
+use std::{sync::Arc, time::Duration};
+use tokio::sync::RwLock;
 
 use colored::*;
 
@@ -87,13 +88,13 @@ async fn event_handler(
                     let storage_channel: u64 = storage_channel_id.get();
 
                     let config = Config { token:ctx.http.token().to_owned(), category, cache_channel, storage_channel };
-                    let mut config_field = data.config.write().unwrap();
+                    let mut config_field = data.config.write().await;
                     *config_field = config.clone();
                      
                     utils::write_config(&config)?;
                 }
                 else {
-                    let config = data.config.read().unwrap();
+                    let config = data.config.read().await;
                     let config = &*config;
                     utils::write_config(config)?;
                 }

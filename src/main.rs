@@ -8,7 +8,8 @@ use regex::Regex;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 use colored::*;
 use std::error::Error;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 fn main() {
      let _ = user_interaction();
