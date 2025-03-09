@@ -8,6 +8,7 @@ use regex::Regex;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 use colored::*;
 use std::error::Error;
+use std::sync::{Arc, RwLock};
 
 fn main() {
      let _ = user_interaction();
@@ -42,7 +43,7 @@ fn user_interaction() -> Result<(), Box<dyn Error>> {
                     false
                };
                
-               (Some(conf.clone()), modify, auto_setup, conf.token)
+               (Arc::new(RwLock::new(conf.clone())), modify, auto_setup, conf.token)
           },
           Err(_) => {
                println!("{}", "No existing configuration found. Creating new config...".yellow());
@@ -65,7 +66,7 @@ fn user_interaction() -> Result<(), Box<dyn Error>> {
                     .items(&options)
                     .interact()?;
                     
-               (None, true, selection == 0, discord_token)
+               (Arc::new(RwLock::new(Config::default())), true, selection == 0, discord_token)
           }
      };
     
@@ -128,12 +129,14 @@ fn user_interaction() -> Result<(), Box<dyn Error>> {
                .interact_text()?
                .parse()?;
             
-          config = Some(Config { 
+          config = Arc::new(RwLock::new(
+               Config { 
                token: discord_token.clone(), 
                category, 
                cache_channel, 
                storage_channel 
-          });
+               }
+          ));
 
           println!("{}", "\n✓ Configuration complete!".green().bold());
      } else if auto && modify_config {
