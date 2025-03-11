@@ -120,7 +120,7 @@ pub async fn discord(token: &str, data: Data) {
         event_handler: |ctx, event, framework, data| {
             Box::pin(event_handler(ctx, event, framework, data))
         },
-        commands: vec![commands::help(), commands::upload()],
+        commands: vec![commands::help(), commands::upload(), commands::download()],
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("~".into()),
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
