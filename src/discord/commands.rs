@@ -12,14 +12,8 @@ use std::io;
 use crate::discord::utils::Config;
 use regex::Regex;
 use poise::futures_util::StreamExt;
-
-#[derive(Debug, Clone)]
-struct CacheData {
-    name: String,
-    id: String,
-    start_message_id: String,
-    end_message_id: String,
-}
+mod cache;
+use crate::discord::commands::cache::CacheData;
 
 #[poise::command(slash_command)]
 pub async fn help(
@@ -65,7 +59,7 @@ pub async fn upload(
     }
     let last_message: Message = storage_channel.say(ctx, "====END OF UPLOAD====").await?;
 
-    cache_channel.say(ctx, format!("Upload: {:?}. ID: {}\nStart: {}. End: {}", &name, &id, first_message.id, last_message.id)).await?;
+    cache_channel.say(ctx, format!("Upload: {:?}. ID: {}.\nStart: {}. End: {}. Files: {}", &name, &id, first_message.id, last_message.id, total_files)).await?;
 
     status_message.edit(ctx, CreateReply::default().content("Upload successful").ephemeral(true)).await?;
     Ok(())
@@ -88,17 +82,21 @@ pub async fn download(
     let storage_channel: ChannelId = ChannelId::new(config.storage_channel);
     let cache_channel: ChannelId = ChannelId::new(config.cache_channel);
 
+    let status_message_builder = CreateReply::default().content(format!("Searching location of {}.", &name)).ephemeral(true);
+    let status_message = ctx.send(status_message_builder).await?;
+
     let mut matched_message: Vec<CacheData> = vec![];
     let mut messages = cache_channel.messages_iter(&ctx).boxed();
     while let Some(Ok(message)) = messages.next().await {
-        if let Some(cached_data) = fetch_cache_data(&message.content).await {
-            if !id.is_empty() && cached_data.id == id && cached_data.name == name {
-                matched_message.push(cached_data);
-                break;
-            }
-            else if id.is_empty() && cached_data.name == name {
-                matched_message.push(cached_data);
-            }
+        let cached_data = fetch_cache_data(&message.content).await?;
+
+        if !id.is_empty() && cached_data.id == id && cached_data.name == name {
+            matched_message.push(cached_data);
+            break;
+        }
+        else if id.is_empty() && cached_data.name == name {
+            matched_message.push(cached_data);
+            
         }
     }
     match matched_message.len() {
@@ -106,8 +104,11 @@ pub async fn download(
             println!("Nothing happened");
         },
         1 => {
-            let start_msg = matched_message[0].start_message_id.as_str();
-            let mut start_id: u64 = start_msg.parse()?;
+            let mut counter: i32 = 0;
+
+            let cache = &matched_message[0];
+            
+            let mut start_id = cache.start_message_id;
 
             'L: loop {
                 let builder = GetMessages::new().after(MessageId::new(start_id));
@@ -120,9 +121,10 @@ pub async fn download(
                     else if message.author.bot && message.attachments.len() > 0 {
                         let download_path = &message.attachments[0].url;
                         download_file(&download_path, &message.content).await?;
+                        status_message.edit(ctx, CreateReply::default().content(format!("{}/{} files downloaded.", &counter, cache.total_files)).ephemeral(true)).await?;
+                        counter += 1;
                     }
                 }
-                println!("{}", messages.len());
                 start_id = messages[messages.len()-1].id.get();
             }
         },
@@ -152,15 +154,17 @@ async fn download_file(download_path: &str, save_path: &str) -> Result<(), Error
     Ok(())
 }     
 
-async fn fetch_cache_data(message: &str) -> Option<CacheData> {
+async fn fetch_cache_data(message: &str) -> Result<CacheData, Error> {
     let data_pattern: Regex = Regex::new(r#"Upload: "(.*?)"\. ID: (.*)\nStart: (.*)\. End: (.*)"#).unwrap();
     
-    data_pattern.captures(message).map(|cached_data| {
-        CacheData {
-            name: cached_data.get(1).unwrap().as_str().to_string(),
-            id: cached_data.get(2).unwrap().as_str().to_string(),
-            start_message_id: cached_data.get(3).unwrap().as_str().to_string(),
-            end_message_id: cached_data.get(4).unwrap().as_str().to_string(),
-        }
-    })
+    if let Some(cached_data) = data_pattern.captures(message) {
+        Ok(CacheData::new()
+        .name(cached_data.get(1).unwrap().as_str().to_string())
+        .id(cached_data.get(2).unwrap().as_str().to_string())
+        .start_message_id(cached_data.get(3).unwrap().as_str().to_string().parse()?)
+        .end_message_id(cached_data.get(4).unwrap().as_str().to_string().parse()?))
+    }
+    else {
+        Err("No information retrieved from message".into())
+    }
 }
