@@ -7,7 +7,7 @@ use serenity::all::EditMessage;
 use uuid::Uuid;
 use crate::discord::{Context, Error};
 use std::path::{PathBuf, Path};
-use std::fs::{File, create_dir_all};
+use std::fs::{create_dir_all, remove_dir_all, File};
 use std::io;
 use crate::discord::utils::Config;
 use regex::Regex;
@@ -65,9 +65,11 @@ pub async fn upload(
 
     let last_message: Message = storage_channel.say(ctx, "====END OF UPLOAD====").await?;
 
-    cache_channel.say(ctx, format!("Upload: {:?}. ID: {}.\nStart: {}. End: {}. Files: {}.", &name, &id, first_message.id, last_message.id, total_files+1)).await?;
+    cache_channel.say(ctx, format!("DATA! Upload: {:?}. ID: {}.\nStart: {}. End: {}. Files: {}.", &name, &id, first_message.id, last_message.id, total_files+1)).await?;
 
     status_message.edit(ctx, EditMessage::new().content("Upload successful")).await?;
+
+    remove_dir_all("DeconstructorResult".to_owned())?;
     Ok(())
 }
 
@@ -81,7 +83,7 @@ pub async fn download(
 
     let id: String = match id {
         Some(val) => val,
-        None => String::new()
+        None => String::default()
     };
 
     let config: &Config  = &*ctx.data().config.read().await;
@@ -104,20 +106,20 @@ pub async fn download(
             Ok(data) => data,
             Err(e) => return Err(e)
         };
-
+        
         if !id.is_empty() && cached_data.id == id && cached_data.name == name {
             matched_message.push(cached_data);
             break;
         }
         else if id.is_empty() && cached_data.name == name {
             matched_message.push(cached_data);
-            
         }
     }
 
     match matched_message.len() {
         0 => {
-            println!("Nothing happened");
+            status_message.edit(ctx, EditMessage::new().content("Could not find an entry with given name")).await?;
+            return Err("No entry found".into())
         },
         1 => {
             let mut counter: i32 = 0;
@@ -137,7 +139,7 @@ pub async fn download(
                     else if message.author.bot && message.attachments.len() > 0 {
                         let download_path = &message.attachments[0].url;
                         download_file(&download_path, &message.content).await?;
-                        status_message.edit(ctx, EditMessage::new().content(format!("{}/{} files downloaded.", &counter, cache.total_files))).await?;
+                        status_message.edit(ctx, EditMessage::new().content(format!("{}/{} files downloaded.", &counter, cache.total_files-1))).await?;
                         counter += 1;
                     }
                 }
@@ -145,10 +147,12 @@ pub async fn download(
             }
             reconstruct()?;
             status_message.edit(ctx, EditMessage::new().content("Installation successful")).await?;
+            remove_dir_all("DeconstructorResult".to_owned())?;
 
         },
         _ => {
-            println!("Nothing happened, but a lot was found");
+            status_message.edit(ctx, EditMessage::new().content("Found several entries with given name. Please specify ID.")).await?;
+            return Err("No unique entry found".into())
         }
     }
 
@@ -188,6 +192,7 @@ async fn fetch_cache_data(message: &str) -> Result<CacheData, Error> {
         Err(format!("No information retrieved from {message}").into())
     }
 }
+
 fn acknowledge() -> CreateReply {
     let msg = "Acknowledged! See next message for completion status";
     let status_message_builder = CreateReply::default().content(msg).ephemeral(true);
