@@ -16,7 +16,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            token: String::new(),
+            token: String::default(),
             category: 0,
             cache_channel: 0,
             storage_channel: 0
@@ -32,7 +32,7 @@ pub fn write_config(config: &Config) -> Result<(), Error>{
     let toml_string = toml::to_string(config).expect("Failed to serialize");
     
     let buffer = toml_string.as_bytes();
-    file.write(&buffer)?;
+    let _ = file.write(&buffer)?;
     Ok(())
 }
 
