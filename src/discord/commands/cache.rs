@@ -11,8 +11,8 @@ pub struct CacheData {
 impl CacheData {
     pub fn new() -> Self {
         Self {
-            name: String::new(),
-            id: String::new(),
+            name: String::default(),
+            id: String::default(),
             start_message_id: 0,
             end_message_id: 0,
             total_files: 0,
